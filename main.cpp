@@ -46,6 +46,82 @@ struct Terrain_Resources {
     std::vector<std::pair<std::string,std::vector<std::string> > > terrain_type_information;
 };
 
+static const char *arrow[] = {
+  /* width height num_colors chars_per_pixel */
+  "    32    32        3            1",
+  /* colors */
+  "X c #000000",
+  ". c #ffffff",
+  "  c None",
+  /* pixels */
+  "XXXX                            ",
+  "X...X                           ",
+  "X.X..X                          ",
+  "X..X..X                         ",
+  " X..X..X                        ",
+  "  X..X..X    X                  ",
+  "   X..X..X XXX                  ",
+  "    X..X..XX                    ",
+  "     X..X.X                     ",
+  "      X..XX                     ",
+  "       XXXXX                    ",
+  "      XX  X.X                   ",
+  "      X    X.X                  ",
+  "     XX     X.X                 ",
+  "             XX                 ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "                                ",
+  "0,0"
+};
+
+static SDL_Cursor *init_system_cursor(const char *image[])
+{
+  int i, row, col;
+  Uint8 data[4*32];
+  Uint8 mask[4*32];
+  int hot_x, hot_y;
+
+  i = -1;
+  for (row=0; row<32; ++row) {
+    for (col=0; col<32; ++col) {
+      if (col % 8) {
+        data[i] <<= 1;
+        mask[i] <<= 1;
+      } else {
+        ++i;
+        data[i] = mask[i] = 0;
+      }
+      switch (image[4+row][col]) {
+        case 'X':
+          data[i] |= 0x01;
+          mask[i] |= 0x01;
+          break;
+        case '.':
+          mask[i] |= 0x01;
+          break;
+        case ' ':
+          break;
+      }
+    }
+  }
+  sscanf(image[4+row], "%d,%d", &hot_x, &hot_y);
+  return SDL_CreateCursor(data, mask, 32, 32, hot_x, hot_y);
+}
 //---------Text_Functions------------------------
 
 int loadFromRenderedText(SDL_Renderer* Renderer,  std::string textureText, TTF_Font* Font, SDL_Color textColor, int x, int y) {
@@ -157,11 +233,10 @@ bool initWindow() {
     return true;
 }
 
-bool initTextures(std::map<std::string,std::vector<Texture> > &textures) {
+bool initTextures(std::map<std::string,std::vector<Texture> > &alltextures) {
     boost::filesystem::path path("../Settlements/assets/textures");
     boost::filesystem::directory_iterator b(path), e;
     std::vector<boost::filesystem::path> directory(b, e);
-    std::map<std::string,std::vector<Texture> > alltextures;
     std::vector<Texture> tmp;
     for(int i=0; i<directory.size();i++) {
         b=boost::filesystem::directory_iterator(directory[i]), e;
@@ -177,7 +252,6 @@ bool initTextures(std::map<std::string,std::vector<Texture> > &textures) {
         alltextures.insert(std::pair<std::string,std::vector<Texture> >(s,tmp));
         tmp.clear();
     }
-    textures=alltextures;
     return true;
 }
 
@@ -268,7 +342,7 @@ bool map_parse(std::map<std::string,Tile> alltiles, std::vector<Tile> &map_info,
 //to find the general mouse position. After that, each triangle of the hexagon is checked and the general mouse position is
 //fixed.
 
-void getMouseLocation(Mouse_Resources &Mouse_Resource, int width, int height, std::vector<Tile> tiles, int &left, int &right) {
+void GetMouseLocation(Mouse_Resources &Mouse_Resource, int width, int height, std::vector<Tile> tiles, int &left, int &right) {
     left=0;right=0;
     right=0;left=0;
     width=width;
@@ -355,7 +429,7 @@ void close() {
 
 //this function moves the camera when the user hovers over the edge of the map
 
-bool move_camera(Mouse_Resources &Mouse_Resource) {
+bool UpdateCamera(Mouse_Resources &Mouse_Resource) {
     bool moved=0;
     if(Mouse_Resource.x<10){//Moves Left based on proximity to edge
         Mouse_Resource.x_modifier+=2;
@@ -446,182 +520,159 @@ int main(int argc, char* args[]) {
     Texture minimap;
     Texture layers;
     srand(time(NULL));
-    if(!initConfig()) {//Loads basic settings
-        printf( "Failed to initialize config!\n" );
+    if(!initConfig() && !initSDL() && !initWindow() && !initTextures(textures) && !initTiles(tiles)) {//Loads basic settings
+        std::cerr<<"Failed to initialize config!\n";
     }
     else {
-        if(!initSDL()) {//Initializes SDL and related libraries
-            printf("Failed to initialize SDL!\n");
+        if(!initSDL() && !initWindow()) {//Initializes SDL and related libraries
+            std::cerr<<"Failed to initialize SDL!\n";
         }
         else {
             if(!initWindow()) { //Creates a window
-                printf("Failed to initialize window!\n");
+                std::cerr<<"Failed to initialize window!\n";
             }
             else {
                 if(!initTextures(textures)) { //Loads all textures
-                    printf( "Failed to load textures!\n" );
+                    std::cerr<<"Failed to load textures!\n";
                 }
                 else {
                     if(!initTiles(tiles)) {
-                        printf("Failed to load tiles!\n");
+                        std::cerr<<"Failed to load tiles!\n";
                     }
                     else {
-                        //Main Initialization area
-
-                        //Init Main System Triggers
-                        bool quit = false; //initiates end of event loop
-                        SDL_Event e; //event value
-
-                        //Overlap Bool
-                        bool overlap;
-
-                        //Viewport Initialization
-                        SDL_Rect screen; //the main screen viewport
-                        screen.x=0;
-                        screen.y=0;
-                        screen.w=SCREEN_WIDTH;
-                        screen.h=SCREEN_HEIGHT;
-
-                        SDL_Rect header; //the header menu viewport
-                        header.x=0;
-                        header.y=0;
-                        header.w=SCREEN_WIDTH;
-                        header.h=30;
-
-                        SDL_Rect header_highlight; //the header highlights viewport
-                        header_highlight.x=0;
-                        header_highlight.y=0;
-                        header_highlight.w=SCREEN_WIDTH;
-                        header_highlight.h=29;
-
-                        SDL_Rect map; //viewport for map area
-                        map.x=0;
-                        map.y=30;
-                        map.w=SCREEN_WIDTH;
-                        map.h=SCREEN_HEIGHT-30;
-
-                        SDL_Rect minimap_selector;
-                        SDL_Rect map22;
-                        SDL_Rect map33;
-
-                        //Window Initializations
-                        Window Terrain_Info(Renderer,100,100,100,100);
-                        Window Map(Renderer, 400, 200, 200, 230);
-
-                        //Button Initializations
-                        Checkbox test(Renderer,"button",0,0);
-                        test.setHeight(26);
-                        test.setWidth(26);
-                        std::string name1;
-
-                        //TTF Initializations
-                        //TTF_Font* Font=NULL;
-                        //Font=TTF_OpenFont("../SDL2_project/assets/ttf/default.ttf", 12);
-                        //if(Font == NULL ) {
-                            //printf( "Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError() );
-                        //}
-                        SDL_Color textColor = {0, 0, 0};
+                        //Cursor Initialization
+                        SDL_Cursor* cursor;
+                        cursor=init_system_cursor(arrow);
+                        SDL_SetCursor(cursor);
 
                         //Map Initialization
                         map_parse(tiles, Terrain_Resource.terrain_individual_information,"..//Settlements//map.map",textures);
                         create_map_layers(layers, minimap,Terrain_Resource,Mouse_Resource,textures,tiles);
 
-                        std::vector<std::string> resources;
+                        //Event Initialization
+                        const Uint8* currentKeyStates;
+                        //initiates end of event loop
+                        SDL_Event e; //event value
 
-                        std::string name;
+                        //keyboard logic
+                        bool QUIT = false;
 
-                        bool resize=false;
-                        bool up=false;
-                        bool down=false;
+                        //Viewport Initialization
+                        SDL_Rect screen={0,0,SCREEN_WIDTH,SCREEN_HEIGHT}; //the main screen viewport
+                        SDL_Rect header={0,0,SCREEN_WIDTH,30}; //the header menu viewport
+                        SDL_Rect header_highlight={0,0,SCREEN_WIDTH,29}; //the header highlights viewport
+                        SDL_Rect map={0,30,SCREEN_WIDTH,SCREEN_HEIGHT-30}; //viewport for map area
+
+                        SDL_Rect srcrect;
+                        SDL_Rect dsrect;
+
+                        //Window Initializations
+                        Window Map(Renderer,0,screen.h-250, 380, 250);
+                        SDL_Rect window0_rect;
+                        SDL_Rect minimap_selector;
 
 
-                        Tile tile;
+                        std::vector<Checkbox> window01;
+                        window01.push_back(Checkbox(Renderer,"hex",22,21));
+                        window01.push_back(Checkbox(Renderer,"layer",22,63));
 
-                        int numFrames = 0;
+                        std::vector<Button> window0;
+                        window0.push_back(Button(Renderer,"cardinalarrow",22,0,0));
+                        window0.push_back(Button(Renderer,"cardinalarrow",43,21,90));
+                        window0.push_back(Button(Renderer,"cardinalarrow",22,42,180));
+                        window0.push_back(Button(Renderer,"cardinalarrow",1,21,270));
+                        window0.push_back(Button(Renderer,"diagonalarrow",1,0,270));
+                        window0.push_back(Button(Renderer,"diagonalarrow",43,0,0));
+                        window0.push_back(Button(Renderer,"diagonalarrow",43,42,90));
+                        window0.push_back(Button(Renderer,"diagonalarrow",1,42,180));
+
                         int placex=0;int placey=0;
-                        bool moved;
                         Uint32 startTime;
                         Uint32 endTime;
-                        const Uint8* currentKeyStates;
-                        SDL_Rect window0_rect;
-                        int left, right;
+                        int left=0, right=0;
 
-                        while(!quit) {
+                        while(!QUIT) {
                             startTime = SDL_GetTicks();
-                            name=" ";
-                            overlap=false;
-                            down=false;
 
-                            //Check collisions
                             SDL_GetMouseState(&Mouse_Resource.x,&Mouse_Resource.y);
-                            getMouseLocation(Mouse_Resource,Terrain_Resource.width, Terrain_Resource.height, Terrain_Resource.terrain_individual_information,left,right);
-                            moved=move_camera(Mouse_Resource);
-                            overlap=Terrain_Info.returnInside();
+                            GetMouseLocation(Mouse_Resource,Terrain_Resource.width, Terrain_Resource.height, Terrain_Resource.terrain_individual_information,left,right);
+                            UpdateCamera(Mouse_Resource);
 
-
-                            while( SDL_PollEvent( &e ) != 0 ) {
-                                currentKeyStates = SDL_GetKeyboardState( NULL );
-                                Terrain_Info.handleEvent(&e);
+                            while(SDL_PollEvent(&e)!=0) {
+                                currentKeyStates=SDL_GetKeyboardState( NULL );
+                                if(e.type==SDL_QUIT) {
+                                    QUIT = true;
+                                }
                                 Map.handleEvent(&e);
-                                test.handleEvent(&e);
-                                if( e.type == SDL_QUIT ) {
-                                    quit = true;
+                                for(int i=0; i<window01.size();i++) {
+                                    window01[i].handleEvent(&e);
                                 }
-                                if(e.type==SDL_MOUSEBUTTONDOWN) {
-                                    up=true;
-                                }
-                                if(e.type==SDL_MOUSEBUTTONUP) {
-                                    up=false;
+                                for(int i=0; i<window0.size();i++) {
+                                    window0[i].handleEvent(&e);
                                 }
                             }
                             //Clear screen
                             SDL_RenderClear(Renderer);
-                            SDL_SetRenderDrawColor(Renderer, 70, 70, 70, 255);
-                            SDL_RenderSetViewport(Renderer,&screen);
-                            SDL_RenderFillRect( Renderer,&screen);
-
-                            //Header Viewport
-                            SDL_RenderSetViewport(Renderer,&header);
-                            SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
-                            SDL_RenderFillRect( Renderer,&header);
-                            SDL_SetRenderDrawColor(Renderer,70,70,70,255);
-                            SDL_RenderFillRect(Renderer,&header_highlight);
-                            test.render(Renderer);
-                            SDL_SetRenderDrawColor(Renderer, 255,255, 255, 255);
 
                             //Map Viewport
-                            SDL_RenderSetViewport(Renderer,&map);
-                            map22.x-=Mouse_Resource.x_modifier;
-                            map22.y-=Mouse_Resource.y_modifier;
-                            map22.w=map.w;
-                            map22.h=map.h;
-                            map33=map;
-                            map33.y=0;
-
-                            layers.renderRect(Renderer,&map33,&map22);
-                            if(left!=-1 && right!=-1) {
-                                placex=Mouse_Resource.tile_location_x+(Mouse_Resource.x_modifier);
-                                placey=Mouse_Resource.tile_location_y+(Mouse_Resource.y_modifier);
-                                textures.find("lcursor")->second[left].render(Renderer, placex, placey);
-                                textures.find("rcursor")->second[right].render(Renderer, placex, placey);
+                            SDL_RenderSetViewport(Renderer,&map); {
+                                srcrect={srcrect.x-=Mouse_Resource.x_modifier, srcrect.y-=Mouse_Resource.y_modifier,map.w,map.h};
+                                dsrect={map.x,0,map.w,map.h};
+                                layers.renderRect(Renderer,&dsrect,&srcrect);
+                                if(left!=-1 && right!=-1) {
+                                    placex=Mouse_Resource.tile_location_x+(Mouse_Resource.x_modifier);
+                                    placey=Mouse_Resource.tile_location_y+(Mouse_Resource.y_modifier);
+                                    //textures.find("lcursor")->second[left].render(Renderer, placex, placey);
+                                    //textures.find("rcursor")->second[right].render(Renderer, placex, placey);
+                                }
                             }
 
                             //Screen Viewport
-                            SDL_RenderSetViewport(Renderer, &screen);
-                            Terrain_Info.render(Renderer);
-                            Map.render(Renderer);
-                            window0_rect=Terrain_Info.returnUsuableViewport();
-                            SDL_RenderSetViewport(Renderer,&window0_rect);
-                            //int counter = loadFromRenderedText(Renderer,name,Font,textColor,0,0);
-                            resources.clear();
-                            window0_rect=Map.returnUsuableViewport();
-                            SDL_RenderSetViewport(Renderer,&window0_rect);
-                            map22={0,0,std::min(window0_rect.w,(50*50+25)/5),std::min(window0_rect.h,(50*28+12)/5)};
-                            minimap_selector={-Mouse_Resource.x_modifier/5,-Mouse_Resource.y_modifier/5,map.w/5,map.h/5};
-                            minimap.renderRect(Renderer,&map22,&map22);
-                            SDL_RenderDrawRect(Renderer,&minimap_selector);
+                            SDL_RenderSetViewport(Renderer, &screen); {
+                                Map.render(Renderer);
+                                window0_rect=Map.returnUsuableViewport();
+                            }
+                            SDL_RenderSetViewport(Renderer,&window0_rect); {
+                                minimap_selector={-Mouse_Resource.x_modifier/5,-Mouse_Resource.y_modifier/5,map.w/5,map.h/5};
+
+                                srcrect={0,0,window0_rect.w,window0_rect.h};
+                                dsrect={0,0,srcrect.w,srcrect.h};
+
+                                if(minimap_selector.x+minimap_selector.w>window0_rect.w-64) {
+                                    srcrect.x=minimap_selector.x+minimap_selector.w-window0_rect.w+64;
+                                    minimap_selector.x-=srcrect.x;
+                                }
+
+
+
+                                minimap.renderRect(Renderer,&dsrect,&srcrect);
+
+                                SDL_RenderDrawRect(Renderer,&minimap_selector);
+
+                                window0_rect.x-=64;
+                                window0_rect.x+=window0_rect.w;
+                                window0_rect.w=64;
+                            }
+
+                            SDL_RenderSetViewport(Renderer,&window0_rect); {
+                                SDL_SetRenderDrawColor(Renderer, 0,0,0,255);
+                                SDL_RenderFillRect(Renderer,NULL);
+                                SDL_SetRenderDrawColor(Renderer, 255,255, 255, 255);
+                                for(int i=0; i<window01.size();i++) {
+                                    window01[i].setRenderRect(window0_rect);
+                                }
+                                for(int i=0; i<window0.size();i++) {
+                                    window0[i].setRenderRect(window0_rect);
+                                }
+                                for(int i=0; i<window01.size();i++) {
+                                    window01[i].render(Renderer);
+                                }
+                                for(int i=0; i<window0.size();i++) {
+                                    window0[i].render(Renderer);
+                                }
+                            }
+
                             SDL_RenderPresent(Renderer);
-                            numFrames++;
                             endTime=SDL_GetTicks();
                             if(endTime-startTime>0) {
                                 std::cout << 1000/(endTime-startTime) << " ";

@@ -8,33 +8,12 @@
 #include "texture.h"
 
 Texture::Texture() {
-    //Initialize
     texture = NULL;
     width = 0;
     height = 0;
 }
 
-bool Texture::createBlank( SDL_Renderer* Renderer, int width, int height, SDL_TextureAccess access ) {
-    texture=NULL;
-    //Create uninitialized texture
-    texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_RGBA8888, access, width, height );
-    if( texture == NULL ) {
-        printf( "Unable to create blank texture! SDL Error: %s\n", SDL_GetError() );
-    }
-    else {
-        width = width;
-        height = height;
-    }
-    return texture != NULL;
-}
-
-void Texture::setAsRenderTarget(SDL_Renderer* Renderer) {
-    //Make self render target
-    SDL_SetRenderTarget(Renderer,texture );
-}
-
 Texture::Texture(SDL_Renderer* Renderer, std::string path) {
-    //Initialize
     loadFromFile(Renderer, path);
 }
 
@@ -50,6 +29,23 @@ Texture::Texture(SDL_Texture* t) {
 Texture::~Texture() {
     //Deallocate
     free();
+}
+
+void Texture::setAsRenderTarget(SDL_Renderer* Renderer) {
+    SDL_SetRenderTarget(Renderer,texture );
+}
+
+bool Texture::createBlank( SDL_Renderer* Renderer, int width, int height, SDL_TextureAccess access ) {
+    texture=NULL;
+    texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_RGBA8888, access, width, height );
+    if( texture == NULL ) {
+        printf( "Unable to create blank texture! SDL Error: %s\n", SDL_GetError() );
+    }
+    else {
+        width = width;
+        height = height;
+    }
+    return texture != NULL;
 }
 
 bool Texture::loadFromFile(SDL_Renderer* Renderer, std::string path) {
@@ -96,9 +92,9 @@ bool Texture::setTexture(SDL_Texture *t) {
 
 void Texture::free() {
     //Free texture if it exists
-        texture = NULL;
-        width = 0;
-        height = 0;
+    texture = NULL;
+    width = 0;
+    height = 0;
 }
 
 void Texture::render(SDL_Renderer* Renderer, int x, int y, int w, int h) {
@@ -109,7 +105,7 @@ void Texture::render(SDL_Renderer* Renderer, int x, int y, int w, int h) {
     else {
         renderQuad = {x,y,w,h};
     }
-    SDL_RenderCopy(Renderer,texture, NULL, &renderQuad );
+    SDL_RenderCopyEx(Renderer,texture, NULL, &renderQuad,angle,NULL,SDL_FLIP_NONE);
 }
 
 void Texture::renderRect(SDL_Renderer* Renderer, SDL_Rect* dstrect, SDL_Rect* srcrect) {

@@ -8,12 +8,15 @@
 #include "texture.h"
 #include "button.h"
 
-Button::Button(SDL_Renderer* Renderer, std::string path, int x_, int y_) {
-    texture0.loadFromFile(Renderer,"..//Settlements//assets//textures//ui//normal_"+path+".png");
-    texture1.loadFromFile(Renderer,"..//Settlements//assets//textures//ui//hover_"+path+".png");
-    texture2.loadFromFile(Renderer,"..//Settlements//assets//textures//ui//pressed_"+path+".png");
+Button::Button(SDL_Renderer* Renderer, std::string path, int x_, int y_,int angle_=0) {
+    texture0.loadFromFile(Renderer,"../Settlements/assets/textures/ui/button/"+path+"/normal.png");
+    texture1.loadFromFile(Renderer,"../Settlements/assets/textures/ui/button/"+path+"/hover.png");
+    texture2.loadFromFile(Renderer,"../Settlements/assets/textures/ui/button/"+path+"/pressed.png");
     x=x_;
     y=y_;
+    texture0.setAngle(angle_);
+    texture1.setAngle(angle_);
+    texture2.setAngle(angle_);
     state=0;
 }
 
@@ -22,7 +25,7 @@ void Button::handleEvent(SDL_Event* e) {
         int xm,ym;
         bool inside=true;
         SDL_GetMouseState(&xm,&ym);
-        if(xm>x+texture0.getWidth() || xm<x || ym>y+texture0.getHeight() || ym<y) {
+        if((renderrect.w!=0 && xm>renderrect.x+renderrect.w) || (renderrect.h!=0 && ym> renderrect.y+renderrect.h) || xm>renderrect.x+x+texture0.getWidth() || xm<x+renderrect.x || ym>renderrect.y+y+texture0.getHeight() || ym<y+renderrect.y) {
             inside=false;
         }
         if(!inside) {

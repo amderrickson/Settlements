@@ -26,10 +26,12 @@ public:
     void setHeight(int h);
     void setX(int x_);
     void setY(int y_);
+    void setRenderRect(SDL_Rect Rect_) {renderrect=Rect_;}
 
 private:
     Texture texture0;
     Texture texture1;
+    SDL_Rect renderrect={0,0,0,0};
     int state,x,y;
     int tmp=0;
 };
